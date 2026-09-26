@@ -8,7 +8,6 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from beir.datasets.data_loader import GenericDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 from sketchnu.countmin import CountMin
 
@@ -90,6 +89,40 @@ def _make_synthetic_beir_dataset(output_dir: Path) -> Path:
     return output_dir
 
 
+def _load_quora_dataset() -> tuple[dict[str, dict[str, str]], dict[str, str], dict[str, dict[str, int]]]:
+    """
+    Load the Quora dataset from Hugging Face Datasets.
+    
+    Args:
+        sample_size: Ignored - loads full dataset
+        
+    Returns:
+        Tuple of (corpus, queries, qrels) dictionaries in BEIR format
+    """
+    from datasets import load_dataset
+    
+    print("Loading Quora dataset from Hugging Face...")
+    
+    # Load the pre-built BEIR Quora dataset
+    corpus_ds = load_dataset("BeIR/quora", "corpus", split="corpus")
+    queries_ds = load_dataset("BeIR/quora", "queries", split="queries")
+    qrels_ds = load_dataset("BeIR/quora-qrels", split="test")
+    
+    # Convert to BEIR format
+    corpus = {row["_id"]: row for row in corpus_ds}
+    queries = {row["_id"]: row["text"] for row in queries_ds}
+    qrels = {}
+    for row in qrels_ds:
+        qid = row["query-id"]
+        if qid not in qrels:
+            qrels[qid] = {}
+        qrels[qid][row["corpus-id"]] = int(row["score"])
+    
+    print(f"Loaded {len(corpus)} documents, {len(queries)} queries, {len(qrels)} query-doc relations")
+    
+    return corpus, queries, qrels
+
+
 def _bm25_baseline(corpus: dict[str, dict[str, str]], queries: dict[str, str], top_k: int, artifact_dir: Path) -> dict:
     doc_texts = [entry["text"] for entry in corpus.values()]
 
@@ -128,7 +161,7 @@ def _bm25_baseline(corpus: dict[str, dict[str, str]], queries: dict[str, str], t
     }
 
 
-def _pocket_dimension_pipeline(corpus: dict[str, dict[str, str]], queries: dict[str, str], top_k: int, artifact_dir: Path) -> dict:
+def _pocket_dimension_pipeline(corpus: dict[str, dict[str, str]], queries: dict[str, str], top_k: int, artifact_dir: Path, d:int = 128) -> dict:
     def record_from_text(doc_id: str, text: str) -> dict:
         counts = Counter(_tokenize(text))
         return {
@@ -140,35 +173,50 @@ def _pocket_dimension_pipeline(corpus: dict[str, dict[str, str]], queries: dict[
     init_start = time.perf_counter()
     records = [record_from_text(doc_id, doc["text"]) for doc_id, doc in corpus.items()]
 
-    cms = CountMin("linear", width=4096, depth=4)
+    # HLL build on the corpus only, to estimate the number of uniqque features for CountMin sizing
+    cms = CountMin("linear", width=int(1.6 * 157_930), depth=4)
     for rec in records:
         for feature in rec["features"]:
-            cms.add(feature)
+            cms.add(feature)  # CMS is a document frequency estimator, so we add each feature once per document
         cms.n_added_records[1] += 1
 
     vectorizer = BM25Vectorizer(
-        d=128,
+        d=d,
         cms_file=cms,
         k1=1.2,
         b=0.75,
-        minDF=1,
-        maxDF=1_000_000,
         temperature=1.0,
     )
-
     doc_embeddings, doc_ids = vectorizer(records)
-    faiss_index = faiss.IndexFlatIP(doc_embeddings.shape[1])
+
+    # Define, train, and add vectors to the FAISS index
+    nlist = max(1, int(1.5 * np.sqrt(len(doc_embeddings))))
+    faiss_index = faiss.index_factory(d, f"RR,IVF{nlist}_HNSW,RaBitQfs2,Refine(SQ8)", faiss.METRIC_INNER_PRODUCT)
+    if not faiss_index.is_trained:
+        train_size = 40 * nlist
+        sample_indices = np.random.choice(len(doc_embeddings), size=train_size, replace=False)
+        sample_embeddings = doc_embeddings[sample_indices]
+        faiss_index.train(sample_embeddings)
+        ivf_index = faiss.extract_index_ivf(faiss_index)
+        ivf_index.nprobe = min(10, int(0.05 * nlist))  # Search 5% of the clusters
+        faiss_index.k_factor = 15  # Reranking factor for Refine step
+
+    # Add the document embeddings to the FAISS index
     faiss_index.add(doc_embeddings.astype(np.float32))
     initialization_elapsed = time.perf_counter() - init_start
 
+    # Save the FAISS index to disk
     index_path = artifact_dir / "faiss_index.bin"
     index_write_start = time.perf_counter()
     faiss.write_index(faiss_index, str(index_path))
     index_write_elapsed = time.perf_counter() - index_write_start
 
+    # Run queries agains the FAISS index and collect results
     qid_order = list(queries.keys())
     query_results = {}
+    query_start = time.perf_counter()
     for qid in qid_order:
+        start_query = time.perf_counter()
         query_record = record_from_text(qid, queries[qid])
         q_emb, _ = vectorizer([query_record])
         if q_emb.size == 0:
@@ -183,6 +231,7 @@ def _pocket_dimension_pipeline(corpus: dict[str, dict[str, str]], queries: dict[
             if doc_id and score > -1e30:
                 hits[doc_id] = score
         query_results[qid] = hits
+    query_elapsed = time.perf_counter() - query_start
 
     results_path = artifact_dir / "pocket_dimension_results.json"
     with results_path.open("w", encoding="utf-8") as f:
@@ -194,7 +243,7 @@ def _pocket_dimension_pipeline(corpus: dict[str, dict[str, str]], queries: dict[
         "index_path": index_path,
         "index_size_bytes": index_path.stat().st_size,
         "initialization_time_seconds": initialization_elapsed,
-        "query_time_seconds": 0.0,
+        "query_time_seconds": query_elapsed,
         "index_save_time_seconds": index_write_elapsed,
         "method": "pocket_dimension",
     }
@@ -211,20 +260,23 @@ def _evaluate_pair(results: dict, qrels: dict[str, dict[str, int]], k_values: li
     return metrics
 
 
-def run_experiment(output_dir: str | Path | None = None) -> dict:
+def run_experiment(output_dir: str | Path | None = None, d: int = 128) -> dict:
     output_dir = Path(output_dir) if output_dir is not None else Path("artifacts")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset_dir = output_dir / "beir_data"
-    _make_synthetic_beir_dataset(dataset_dir)
+    # Load Quora dataset (with optional sampling for testing)
+    corpus, queries, qrels = _load_quora_dataset()
 
-    loader = GenericDataLoader(data_folder=str(dataset_dir), prefix=None)
-    corpus, queries, qrels = loader.load(split="test")
-
+    print("Starting BM25 baseline...")
     bm25 = _bm25_baseline(corpus, queries, top_k=10, artifact_dir=output_dir)
-    pocket = _pocket_dimension_pipeline(corpus, queries, top_k=10, artifact_dir=output_dir)
 
+    print("Starting Pocket Dimension pipeline...")
+    pocket = _pocket_dimension_pipeline(corpus, queries, top_k=10, artifact_dir=output_dir, d=d)
+
+    print("Evaluating BM25 results...")
     bm25_metrics = _evaluate_pair(bm25["results"], qrels, [1, 3, 5, 10])
+
+    print("Evaluating Pocket Dimension results...")
     pocket_metrics = _evaluate_pair(pocket["results"], qrels, [1, 3, 5, 10])
 
     summary = {
@@ -257,7 +309,8 @@ def run_experiment(output_dir: str | Path | None = None) -> dict:
 
 
 def main() -> None:
-    summary = run_experiment(Path("artifacts"))
+    print("\nRunning full experiment with all 500K documents...")
+    summary = run_experiment(Path("artifacts_full"), d=128)
     print(json.dumps(summary, indent=2, sort_keys=True))
 
 

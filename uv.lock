@@ -1541,6 +1541,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "beir" },
     { name = "bm25" },
+    { name = "datasets" },
     { name = "faiss-cpu" },
     { name = "pocket-dimension" },
 ]
@@ -1555,6 +1556,7 @@ dev = [
 requires-dist = [
     { name = "beir", specifier = ">=2.2.0" },
     { name = "bm25", specifier = ">=0.3.11" },
+    { name = "datasets", specifier = ">=5.0.1" },
     { name = "faiss-cpu", specifier = ">=1.15.1" },
     { name = "pocket-dimension", specifier = ">=0.3.0" },
 ]
