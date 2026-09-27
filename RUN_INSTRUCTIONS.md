@@ -6,58 +6,73 @@ This project uses `uv` for dependency management. To run the experiments, use:
 
 ```bash
 # From the project root directory
-uv run python main.py
+uv run python run_experiment.py
 ```
 
 Alternatively, you can activate the virtual environment directly:
 
 ```bash
 source .venv/bin/activate
-python main.py
+python run_experiment.py
 ```
 
 ## Running Experiments
 
-The `main.py` script supports different experiment sizes via the `sample_size` parameter:
+The `run_experiment.py` script provides a command-line interface for running experiments. It supports several parameters:
 
-### Small Test Run (1000 documents)
+### Basic Usage
+
 ```bash
-uv run python main.py
+uv run python run_experiment.py
 ```
 
-This runs a quick test with 1000 documents to verify everything works.
+This runs the full experiment using BEIR datasets with default settings.
 
-### Full Experiment (500K+ documents)
-To run the full experiment on all available Quora data (~500,000 documents), uncomment the full experiment section in `main.py`:
+### Testing Mode (Small Synthetic Dataset)
 
-```python
-def main() -> None:
-    # Test with a small sample first
-    print("Running test with 1000 documents...")
-    summary = run_experiment(Path("artifacts_test"), sample_size=1000)
-    print(json.dumps(summary, indent=2, sort_keys=True))
-    
-    # Uncomment to run full experiment on all 500K documents
-    # print("\nRunning full experiment with all 500K documents...")
-    # summary = run_experiment(Path("artifacts_full"))
-    # print(json.dumps(summary, indent=2, sort_keys=True))
-```
+To run a quick test with synthetic data (useful for verification):
 
-Then run:
 ```bash
-uv run python main.py
+uv run python run_experiment.py --testing
 ```
+
+This creates a small synthetic dataset and runs the experiment quickly to verify everything works.
+
+### Custom Parameters
+
+You can customize the dimensionality of dense vectors and output directory:
+
+```bash
+uv run python run_experiment.py --d 256 --output_dir artifacts_custom
+```
+
+- `--d`: Dimensionality of dense vectors for Pocket Dimension (default: 128, minimum: 64)
+- `--output_dir`: Directory to save artifacts (default: `artifacts_full`)
+- `--testing`: Run in testing mode with synthetic data
+
+### Available BEIR Datasets
+
+The experiments use datasets from the BEIR framework. The default dataset is automatically downloaded when needed. You can also download specific datasets using:
+
+```bash
+python download_dataset.py
+```
+
+This script downloads the 'nfcorpus' dataset (~130K documents) by default and lists other available options.
 
 ## Dataset Information
 
-The experiments use the Quora dataset from Hugging Face Datasets (`BeIR/quora`):
-- Full dataset: ~500,000 documents and queries
-- The dataset is loaded on-demand from Hugging Face Hub
-- No local download required (streamed directly)
+The experiments use BEIR (Benchmarking IR) datasets:
+- Datasets are downloaded on-demand from BEIR's servers
+- Default dataset: nfcorpus (~130,000 news articles)
+- Other available datasets include scidocs, fiqa, dbpedia-entity, etc.
+- Use `download_dataset.py` to download specific datasets or see available options
 
 ## Output
 
-Results are saved in the `artifacts_*` directories:
-- `artifacts_test/`: Small test run results
-- `artifacts_full/`: Full experiment results (when uncommented)
-- Each directory contains JSON files with metrics and index files
+Results are saved in the specified output directory (default: `artifacts_full`):
+- JSON files with retrieval results and metrics
+- FAISS index files for Pocket Dimension vectors
+- BM25 index directories
+- Summary statistics in `summary.json`
+- Each run creates its own artifact directory

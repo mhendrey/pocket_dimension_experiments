@@ -21,8 +21,6 @@ from sklearn.feature_extraction.text import HashingVectorizer
 
 from pocket_dimension.vectorizer import BM25Vectorizer
 
-TOKEN_PATTERN: str = r"(?u)\b\w\w+\b"  # matches BM25's default
-SPLIT_FN = re.compile(TOKEN_PATTERN).findall
 STOPWORDS = set(Tokenizer().stopwords)  # Matches BM25's default stopwords
 
 TEXT_ANALYZER = HashingVectorizer(
