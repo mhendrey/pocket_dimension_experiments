@@ -22,7 +22,7 @@ def convert_to_beir(
     queries_ds : Dataset
         Dataset containing query documents with '_id' and 'text' fields.
     qrels_ds : Dataset
-        Dataset containing query relevance information with 'query-id', 
+        Dataset containing query relevance information with 'query-id',
         'corpus-id', and 'score' fields.
 
     Returns

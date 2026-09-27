@@ -47,15 +47,22 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+
 if __name__ == "__main__":
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if not output_dir.exists():
-        raise ValueError(f"Output directory {output_dir} does not exist. Please create it first.")
+        raise ValueError(
+            f"Output directory {output_dir} does not exist. Please create it first."
+        )
     if not isinstance(args.d, int) or args.d <= 63:
-        raise ValueError(f"Dimensionality {args.d} is not valid. Please provide a positive integer greater than 63.")
+        raise ValueError(
+            f"Dimensionality {args.d} is not valid. Please provide a positive integer greater than 63."
+        )
     if not isinstance(args.testing, bool):
-        raise ValueError(f"Testing flag {args.testing} is not valid. Please provide a boolean value.")
+        raise ValueError(
+            f"Testing flag {args.testing} is not valid. Please provide a boolean value."
+        )
 
     main(output_dir, args.d, args.testing)

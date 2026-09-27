@@ -14,24 +14,29 @@ import BM25
 
 
 def run_bm25_baseline(
-    corpus: dict[str, dict[str, str]], 
-    queries: dict[str, str], 
-    top_k: int, 
-    artifact_dir: Path
+    corpus: dict[str, dict[str, str]],
+    queries: dict[str, str],
+    top_k: int,
+    artifact_dir: Path,
 ) -> dict:
     """
     Run BM25 baseline retrieval on the given corpus and queries.
-    
+
     Args:
         corpus: Dictionary of documents in BEIR format
         queries: Dictionary of queries
         top_k: Number of results to return per query
         artifact_dir: Directory to save artifacts (results, index)
-        
+
     Returns:
         Dictionary containing results and performance metrics
     """
-    doc_texts = [entry["text"] for entry in corpus.values()]
+    # Create ordered mapping from corpus IDs to texts
+    doc_ids = list(corpus.keys())  # Keep original IDs in order
+    doc_texts = [corpus[doc_id]["text"] for doc_id in doc_ids]
+
+    # Create index → original_id mapping
+    idx_to_doc_id = {idx: doc_id for idx, doc_id in enumerate(doc_ids)}
 
     init_start = time.perf_counter()
     retriever = BM25.index(doc_texts)
@@ -50,7 +55,8 @@ def run_bm25_baseline(
 
     results = {}
     for qid, hits in zip(query_order, raw_results):
-        results[qid] = {str(int(hit["id"])): float(hit["score"]) for hit in hits}
+        # Map BM25's indices back to original corpus IDs
+        results[qid] = {idx_to_doc_id[hit["id"]]: float(hit["score"]) for hit in hits}
 
     results_path = artifact_dir / "bm25_results.json"
     with results_path.open("w", encoding="utf-8") as f:
