@@ -1,6 +1,10 @@
+import sys
 from pathlib import Path
 
-from main import run_experiment
+# Add project root to path so we can import from src
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.experiment import run_experiment
 
 
 def test_run_experiment(tmp_path):
