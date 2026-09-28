@@ -67,6 +67,16 @@ Available profiles:
 
 The selected profile and its resolved factory, training sample count, and search parameters are recorded in `summary.json`.
 
+### Compare Profile Results
+
+After running each profile, print a Markdown table with BM25 and all profile results:
+
+```bash
+uv run python summarize_profiles.py
+```
+
+The script discovers `artifacts_*/summary.json` in the current directory. Use `--artifacts-root PATH` to read summaries from another directory.
+
 ### Available BEIR Datasets
 
 The experiments use datasets from the BEIR framework. The default dataset is automatically downloaded when needed. You can also download specific datasets using:

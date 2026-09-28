@@ -67,18 +67,207 @@ The experiments use the Quora dataset containing 522,931 documents and 15,000 qu
 
 ## Performance Comparison
 
-| Metric | BM25 | Pocket Dimension |
-|--------|------|------------------|
-| **Initialization Time** | 4.42s | 8.04s |
-| **Query Time** | 8.26s | 1.93s |
-| **Index Size** | 83MB | 79MB |
-| **NDCG@1** | 0.5812 | 0.4723 |
-| **NDCG@3** | 0.6823 | 0.5823 |
-| **NDCG@5** | 0.7345 | 0.6345 |
-| **NDCG@10** | 0.8045 | 0.68249 |
-| **MAP@10** | 0.75544 | 0.63318 |
-| **Recall@10** | 0.90148 | 0.78044 |
-| **P@10** | 0.12181 | 0.10348
+`N` is the corpus document count and `k` is the requested result count. Search settings are resolved at runtime and recorded in each `summary.json`.
+
+- **Flat**: Exhaustive exact dense-vector search.
+- **SQ8**: 8-bit scalar-quantized vectors, trained on up to 5,000 samples.
+- **RaBitQ-Refine-SQ8**: RaBitQ with SQ8 refinement, trained on up to 5,000 samples.
+- **HNSW32**: HNSW graph with `M=32`; `hnsw.efSearch = 3k`.
+- **IVF-RaBitQ-HNSW-Refine-SQ8**: IVF with an HNSW quantizer, RaBitQ, and SQ8 refinement. `nlist = max(1, floor(1.5 * sqrt(N)))`; training uses up to `40 * nlist` samples. Search uses `nprobe = max(10, floor(0.05 * nlist))`, quantizer `efSearch = 2 * nprobe`, and `k_factor = 15`.
+
+Flat, SQ8, and RaBitQ-Refine-SQ8 do not set profile-specific search parameters; they are brute force comparisions.
+
+
+
+<table>
+	<thead>
+		<tr>
+			<th rowspan="2" scope="col">Metric</th>
+			<th rowspan="2" scope="col">BM25</th>
+			<th colspan="5" scope="colgroup">Pocket Dimension</th>
+		</tr>
+		<tr>
+			<th scope="col">Flat</th>
+			<th scope="col">SQ8</th>
+			<th scope="col">RaBitQ-Refine-SQ8</th>
+			<th scope="col">HNSW32</th>
+			<th scope="col">IVF-RaBitQ-HNSW-Refine-SQ8</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<th scope="row">Index Size (MB)</th>
+			<td>79.58</td>
+			<td>255.32</td>
+			<td>63.83</td>
+			<td>75.86</td>
+			<td>391.03</td>
+			<td>81.07</td>
+		</tr>
+		<tr>
+			<th scope="row">Initialization Time (seconds)</th>
+			<td>4.422</td>
+			<td>7.066</td>
+			<td>7.025</td>
+			<td>8.104</td>
+			<td>15.858</td>
+			<td>11.575</td>
+		</tr>
+		<tr>
+			<th scope="row">Query Time (seconds)</th>
+			<td>8.195</td>
+			<td>13.777</td>
+			<td>10.198</td>
+			<td>1.792</td>
+			<td>0.429</td>
+			<td>0.529</td>
+		</tr>
+		<tr>
+			<th scope="row">MAP@1</th>
+			<td>0.62555</td>
+			<td>0.52339</td>
+			<td>0.52324</td>
+			<td>0.52170</td>
+			<td>0.43158</td>
+			<td>0.48286</td>
+		</tr>
+		<tr>
+			<th scope="row">MAP@3</th>
+			<td>0.72487</td>
+			<td>0.60587</td>
+			<td>0.60570</td>
+			<td>0.60152</td>
+			<td>0.49657</td>
+			<td>0.55111</td>
+		</tr>
+		<tr>
+			<th scope="row">MAP@5</th>
+			<td>0.74329</td>
+			<td>0.62276</td>
+			<td>0.62256</td>
+			<td>0.61606</td>
+			<td>0.50985</td>
+			<td>0.56284</td>
+		</tr>
+		<tr>
+			<th scope="row">MAP@10</th>
+			<td>0.75544</td>
+			<td>0.63353</td>
+			<td>0.63347</td>
+			<td>0.62387</td>
+			<td>0.51836</td>
+			<td>0.57071</td>
+		</tr>
+		<tr>
+			<th scope="row">NDCG@1</th>
+			<td>0.71630</td>
+			<td>0.60180</td>
+			<td>0.60160</td>
+			<td>0.60000</td>
+			<td>0.50190</td>
+			<td>0.55760</td>
+		</tr>
+		<tr>
+			<th scope="row">NDCG@3</th>
+			<td>0.76589</td>
+			<td>0.64378</td>
+			<td>0.64364</td>
+			<td>0.63851</td>
+			<td>0.52918</td>
+			<td>0.58567</td>
+		</tr>
+		<tr>
+			<th scope="row">NDCG@5</th>
+			<td>0.78611</td>
+			<td>0.66418</td>
+			<td>0.66394</td>
+			<td>0.65496</td>
+			<td>0.54421</td>
+			<td>0.59842</td>
+		</tr>
+		<tr>
+			<th scope="row">NDCG@10</th>
+			<td>0.80450</td>
+			<td>0.68323</td>
+			<td>0.68325</td>
+			<td>0.66762</td>
+			<td>0.55853</td>
+			<td>0.61183</td>
+		</tr>
+		<tr>
+			<th scope="row">P@1</th>
+			<td>0.71630</td>
+			<td>0.60180</td>
+			<td>0.60160</td>
+			<td>0.60000</td>
+			<td>0.50190</td>
+			<td>0.55760</td>
+		</tr>
+		<tr>
+			<th scope="row">P@3</th>
+			<td>0.33053</td>
+			<td>0.27813</td>
+			<td>0.27807</td>
+			<td>0.27527</td>
+			<td>0.23070</td>
+			<td>0.25163</td>
+		</tr>
+		<tr>
+			<th scope="row">P@5</th>
+			<td>0.21954</td>
+			<td>0.18604</td>
+			<td>0.18590</td>
+			<td>0.18162</td>
+			<td>0.15400</td>
+			<td>0.16514</td>
+		</tr>
+		<tr>
+			<th scope="row">P@10</th>
+			<td>0.12181</td>
+			<td>0.10374</td>
+			<td>0.10380</td>
+			<td>0.09856</td>
+			<td>0.08580</td>
+			<td>0.09076</td>
+		</tr>
+		<tr>
+			<th scope="row">Recall@1</th>
+			<td>0.62555</td>
+			<td>0.52339</td>
+			<td>0.52324</td>
+			<td>0.52170</td>
+			<td>0.43158</td>
+			<td>0.48286</td>
+		</tr>
+		<tr>
+			<th scope="row">Recall@3</th>
+			<td>0.79462</td>
+			<td>0.66975</td>
+			<td>0.66968</td>
+			<td>0.66219</td>
+			<td>0.54517</td>
+			<td>0.60362</td>
+		</tr>
+		<tr>
+			<th scope="row">Recall@5</th>
+			<td>0.84859</td>
+			<td>0.72471</td>
+			<td>0.72435</td>
+			<td>0.70843</td>
+			<td>0.58744</td>
+			<td>0.64055</td>
+		</tr>
+		<tr>
+			<th scope="row">Recall@10</th>
+			<td>0.90148</td>
+			<td>0.78241</td>
+			<td>0.78277</td>
+			<td>0.74756</td>
+			<td>0.63121</td>
+			<td>0.68182</td>
+		</tr>
+	</tbody>
+</table>
 
 ## Dependencies
 
