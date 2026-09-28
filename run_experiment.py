@@ -21,7 +21,7 @@ def main(output_dir: Path, d: int, testing: bool) -> None:
         print("\nRunning experiment in testing mode with a small synthetic dataset...")
     else:
         print("\nRunning full experiment with all 500K documents...")
-    summary = run_experiment(Path("artifacts_full"), d=d, testing=testing)
+    summary = run_experiment(output_dir, d=d, testing=testing)
     print(json.dumps(summary, indent=2, sort_keys=True))
 
 

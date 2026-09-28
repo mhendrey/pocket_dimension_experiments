@@ -6,6 +6,8 @@ This module provides functions for loading datasets from various sources and con
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from datasets import Dataset, load_dataset
 
 
@@ -229,10 +231,19 @@ def load_quora_dataset() -> tuple[Dataset, Dataset, Dataset]:
     """
     print("Loading Quora dataset from Hugging Face...")
 
-    # Load the pre-built BEIR Quora dataset
-    corpus_ds = load_dataset("BeIR/quora", "corpus", split="corpus")
-    queries_ds = load_dataset("BeIR/quora", "queries", split="queries")
-    qrels_ds = load_dataset("BeIR/quora-qrels", split="test")
+    # Configure dataset loading to use cache and avoid unnecessary downloads
+    from datasets import DownloadConfig
+    
+    download_config = DownloadConfig(
+        cache_dir=str(Path.home() / ".cache" / "huggingface" / "datasets"),
+        force_download=False,
+        resume_download=True,
+    )
+
+    # Load the pre-built BEIR Quora dataset with explicit configuration
+    corpus_ds = load_dataset("BeIR/quora", "corpus", split="corpus", download_config=download_config)
+    queries_ds = load_dataset("BeIR/quora", "queries", split="queries", download_config=download_config)
+    qrels_ds = load_dataset("BeIR/quora-qrels", split="test", download_config=download_config)
 
     print(
         f"Loaded {len(corpus_ds)} documents, {len(queries_ds)} queries, {len(qrels_ds)} query-doc relations"

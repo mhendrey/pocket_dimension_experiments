@@ -78,12 +78,13 @@ def run_pocket_dimension_pipeline(
             f"RR,RaBitQfs1,Refine(SQ8)",
             faiss.METRIC_INNER_PRODUCT,
         )
+        train_size = min(5_000, len(doc_embeddings))
     else:
         faiss_index = faiss.index_factory(
             d, f"RR,IVF{nlist}_HNSW,RaBitQfs1,Refine(SQ8)", faiss.METRIC_INNER_PRODUCT
         )
-    if not faiss_index.is_trained:
         train_size = min(40 * nlist, len(doc_embeddings))
+    if not faiss_index.is_trained:
         sample_indices = np.random.choice(
             len(doc_embeddings), size=train_size, replace=False
         )

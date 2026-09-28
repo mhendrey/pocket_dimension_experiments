@@ -8,13 +8,14 @@ from src.experiment import run_experiment
 
 
 def test_run_experiment(tmp_path):
-    result = run_experiment(tmp_path)
+    result = run_experiment(tmp_path, testing=True)
 
     assert "bm25" in result
     assert "pocket_dimension" in result
     assert "artifacts_dir" in result
-    assert result["artifacts_dir"].exists()
-    assert result["bm25"]["results_path"].exists()
-    assert result["pocket_dimension"]["results_path"].exists()
-    assert result["bm25"]["index_path"].exists()
-    assert result["pocket_dimension"]["index_path"].exists()
+    assert Path(result["artifacts_dir"]) == tmp_path
+    assert Path(result["bm25"]["results_path"]).is_file()
+    assert Path(result["pocket_dimension"]["results_path"]).is_file()
+    assert Path(result["bm25"]["index_path"]).is_dir()
+    assert Path(result["pocket_dimension"]["index_path"]).is_file()
+    assert (tmp_path / "summary.json").is_file()
