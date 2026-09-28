@@ -8,6 +8,8 @@ This project evaluates **Pocket Dimension**, a method that projects sparse BM25-
 
 ## Key Findings
 
+The figures below are from the repository's previously recorded experiment configuration. They are not measurements of the new default `flat` profile. New runs default to Flat to provide an exact dense-search baseline; select an ANN profile with `--index-profile` to explore latency, index size, and effectiveness trade-offs. The chosen profile and resolved settings are recorded in each run's `summary.json`.
+
 ### Retrieval Effectiveness
 - **BM25**: NDCG@10: 0.8045, MAP@10: 0.75544, Recall@10: 0.90148, P@10: 0.12181
 - **Pocket Dimension**: NDCG@10: 0.68249, MAP@10: 0.63318, Recall@10: 0.78044, P@10: 0.10348
@@ -35,6 +37,8 @@ Execute the benchmark using the following command:
 ```bash
 uv run python run_experiment.py --output_dir artifacts
 ```
+
+To compare ANN index configurations, run separate experiments with `--index-profile flat`, `sq8`, `rabitq-refine-sq8`, `hnsw32`, or `ivf-hnsw-rabitq-refine-sq8`. Keep the corpus, projection dimension, and evaluation settings the same when comparing profile results.
 
 Results are saved in the specified output directory with:
 - Retrieval results (JSON)

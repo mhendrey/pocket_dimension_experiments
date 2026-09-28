@@ -20,6 +20,7 @@ from sketchnu.countmin import CountMin
 from sklearn.feature_extraction.text import HashingVectorizer
 
 from pocket_dimension.vectorizer import BM25Vectorizer
+from src.retrieval.index_profile import get_index_profile
 
 STOPWORDS = set(Tokenizer().stopwords)  # Matches BM25's default stopwords
 
@@ -37,6 +38,7 @@ def run_pocket_dimension_pipeline(
     top_k: int,
     artifact_dir: Path,
     d: int = 128,
+    index_profile: str = "flat",
 ) -> dict:
     """
     Run Pocket Dimension retrieval pipeline on the given corpus and queries.
@@ -47,6 +49,7 @@ def run_pocket_dimension_pipeline(
         top_k: Number of results to return per query
         artifact_dir: Directory to save artifacts (results, index)
         d: Dimensionality of the dense vectors
+        index_profile: Named FAISS index profile to use
 
     Returns:
         Dictionary containing results and performance metrics
@@ -70,41 +73,29 @@ def run_pocket_dimension_pipeline(
     )
 
     # Define, train, and add vectors to the FAISS index
-    nlist = max(1, int(1.5 * np.sqrt(len(doc_embeddings))))
-    if len(doc_embeddings) < 1_000_000:
-        faiss_index = faiss.index_factory(
-            #    d, "SQ8", faiss.METRIC_INNER_PRODUCT
-            d,
-            f"RR,RaBitQfs1,Refine(SQ8)",
-            faiss.METRIC_INNER_PRODUCT,
-        )
-        train_size = min(5_000, len(doc_embeddings))
-    else:
-        faiss_index = faiss.index_factory(
-            d, f"RR,IVF{nlist}_HNSW,RaBitQfs1,Refine(SQ8)", faiss.METRIC_INNER_PRODUCT
-        )
-        train_size = min(40 * nlist, len(doc_embeddings))
+    profile = get_index_profile(index_profile)
+    resolved_profile = profile.resolve(len(doc_embeddings), top_k)
+    faiss_index = faiss.index_factory(
+        d, resolved_profile.factory_description, faiss.METRIC_INNER_PRODUCT
+    )
+    training_sample_count = 0
     if not faiss_index.is_trained:
+        train_size = resolved_profile.training_sample_size
+        if train_size is None:
+            raise ValueError(
+                f"Index profile {profile.key!r} requires training but has no "
+                "training sample policy."
+            )
         sample_indices = np.random.choice(
             len(doc_embeddings), size=train_size, replace=False
         )
         sample_embeddings = doc_embeddings[sample_indices]
         faiss_index.train(sample_embeddings)
-        try:
-            ivf_index = faiss.extract_index_ivf(faiss_index)
-            quantizer = faiss.downcast_index(ivf_index.quantizer)
-            nprobe = max(10, int(0.05 * nlist))  # Search 5% of the clusters
-            ivf_index.nprobe = nprobe
-            quantizer.hnsw.efSearch = int(
-                2 * nprobe
-            )  # Increase to improve graph accuracy
-        except Exception:
-            pass  # Not an IVF index, so we skip setting nprobe
-        if hasattr(faiss_index, "k_factor"):
-            faiss_index.k_factor = 15  # Reranking factor for Refine step
+        training_sample_count = train_size
 
     # Add the document embeddings to the FAISS index
     faiss_index.add(doc_embeddings)
+    _apply_search_parameters(faiss_index, resolved_profile.search_parameters)
     initialization_elapsed = time.perf_counter() - init_start
 
     # Save the FAISS index to disk
@@ -161,11 +152,31 @@ def run_pocket_dimension_pipeline(
         "results_path": results_path,
         "index_path": index_path,
         "index_size_bytes": index_path.stat().st_size,
+        "index_profile": resolved_profile.metadata(training_sample_count),
         "initialization_time_seconds": initialization_elapsed,
         "query_time_seconds": query_elapsed,
         "index_save_time_seconds": index_write_elapsed,
         "method": "pocket_dimension",
     }
+
+
+def _apply_search_parameters(faiss_index, search_parameters: dict[str, int]) -> None:
+    if "hnsw.efSearch" in search_parameters:
+        faiss_index.hnsw.efSearch = search_parameters["hnsw.efSearch"]
+
+    if "ivf.nprobe" in search_parameters:
+        ivf_index = faiss.extract_index_ivf(faiss_index)
+        ivf_index.nprobe = search_parameters["ivf.nprobe"]
+
+    if "ivf.quantizer.hnsw.efSearch" in search_parameters:
+        ivf_index = faiss.extract_index_ivf(faiss_index)
+        quantizer = faiss.downcast_index(ivf_index.quantizer)
+        quantizer.hnsw.efSearch = search_parameters[
+            "ivf.quantizer.hnsw.efSearch"
+        ]
+
+    if "k_factor" in search_parameters:
+        faiss_index.k_factor = search_parameters["k_factor"]
 
 
 def record_from_text(doc_id: str, text: str) -> dict:

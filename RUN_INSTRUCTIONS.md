@@ -46,9 +46,26 @@ You can customize the dimensionality of dense vectors and output directory:
 uv run python run_experiment.py --d 256 --output_dir artifacts_custom
 ```
 
+Choose a FAISS index profile with `--index-profile`:
+
+```bash
+uv run python run_experiment.py --testing --index-profile flat
+uv run python run_experiment.py --index-profile hnsw32 --output_dir artifacts_hnsw32
+```
+
 - `--d`: Dimensionality of dense vectors for Pocket Dimension (default: 128, minimum: 64)
 - `--output_dir`: Directory to save artifacts (default: `artifacts_full`)
 - `--testing`: Run in testing mode with synthetic data
+- `--index-profile`: FAISS index profile (default: `flat`)
+
+Available profiles:
+- `flat`: exact dense search; no training or search tuning
+- `sq8`: scalar quantization with a training sample capped at 5,000 documents
+- `rabitq-refine-sq8`: RaBitQ with SQ8 refinement and a training sample capped at 5,000 documents
+- `hnsw32`: HNSW with `efSearch` set to three times the requested result count
+- `ivf-hnsw-rabitq-refine-sq8`: IVF-HNSW with RaBitQ and SQ8 refinement; training is capped at `40 * nlist`
+
+The selected profile and its resolved factory, training sample count, and search parameters are recorded in `summary.json`.
 
 ### Available BEIR Datasets
 

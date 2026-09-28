@@ -13,15 +13,18 @@ import json
 from pathlib import Path
 
 from src.experiment import run_experiment
+from src.retrieval.index_profile import INDEX_PROFILES
 
 
-def main(output_dir: Path, d: int, testing: bool) -> None:
+def main(output_dir: Path, d: int, testing: bool, index_profile: str) -> None:
     """Main entry point for the CLI script."""
     if testing:
         print("\nRunning experiment in testing mode with a small synthetic dataset...")
     else:
         print("\nRunning full experiment with all 500K documents...")
-    summary = run_experiment(output_dir, d=d, testing=testing)
+    summary = run_experiment(
+        output_dir, d=d, testing=testing, index_profile=index_profile
+    )
     print(json.dumps(summary, indent=2, sort_keys=True))
 
 
@@ -45,6 +48,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run in testing mode with a smaller synthetic dataset (default: False)",
     )
+    parser.add_argument(
+        "--index-profile",
+        choices=tuple(INDEX_PROFILES),
+        default="flat",
+        help="FAISS index profile (default: flat)",
+    )
     return parser.parse_args()
 
 
@@ -65,4 +74,4 @@ if __name__ == "__main__":
             f"Testing flag {args.testing} is not valid. Please provide a boolean value."
         )
 
-    main(output_dir, args.d, args.testing)
+    main(output_dir, args.d, args.testing, args.index_profile)

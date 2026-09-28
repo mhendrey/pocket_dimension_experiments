@@ -21,7 +21,10 @@ from src.evaluation.metrics import evaluate_retrieval
 
 
 def run_experiment(
-    output_dir: str | Path | None = None, d: int = 128, testing: bool = False
+    output_dir: str | Path | None = None,
+    d: int = 128,
+    testing: bool = False,
+    index_profile: str = "flat",
 ) -> dict:
     """
     Run a complete experiment comparing BM25 and Pocket Dimension retrieval.
@@ -29,6 +32,7 @@ def run_experiment(
     Args:
         output_dir: Directory to save artifacts (default: "artifacts")
         d: Dimensionality of dense vectors for Pocket Dimension
+        index_profile: Named FAISS index profile for Pocket Dimension
 
     Returns:
         Dictionary containing summary of results and metrics
@@ -48,7 +52,12 @@ def run_experiment(
 
     print("Starting Pocket Dimension pipeline...")
     pocket = run_pocket_dimension_pipeline(
-        corpus, queries, top_k=10, artifact_dir=output_dir, d=d
+        corpus,
+        queries,
+        top_k=10,
+        artifact_dir=output_dir,
+        d=d,
+        index_profile=index_profile,
     )
 
     print("Evaluating BM25 results...")
@@ -62,7 +71,7 @@ def run_experiment(
         "bm25": {
             "results_path": str(bm25["results_path"]),
             "index_path": str(bm25["index_path"]),
-            "index_size_bytes": bm25["index_size_bytes"],
+            "index_size_MB": bm25["index_size_bytes"] / (1024 * 1024),
             "initialization_time_seconds": bm25["initialization_time_seconds"],
             "query_time_seconds": bm25["query_time_seconds"],
             "index_save_time_seconds": bm25["index_save_time_seconds"],
@@ -71,10 +80,11 @@ def run_experiment(
         "pocket_dimension": {
             "results_path": str(pocket["results_path"]),
             "index_path": str(pocket["index_path"]),
-            "index_size_bytes": pocket["index_size_bytes"],
+            "index_size_MB": pocket["index_size_bytes"] / (1024 * 1024),
             "initialization_time_seconds": pocket["initialization_time_seconds"],
             "query_time_seconds": pocket["query_time_seconds"],
             "index_save_time_seconds": pocket["index_save_time_seconds"],
+            "index_profile": pocket["index_profile"],
             "metrics": pocket_metrics,
         },
     }
